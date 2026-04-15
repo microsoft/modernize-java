@@ -1,33 +1,73 @@
-# Project
+# GitHub Copilot modernization – Java Upgrade CLI Plugin
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+**GitHub Copilot modernization – Java Upgrade CLI Plugin** helps you upgrade your Java applications directly from the command line. It brings the same intelligent modernization capabilities as the VS Code extension to your terminal and CI/CD pipelines, enabling you to:
 
-As the maintainer of this project, please make a few updates:
+- Analyze your project, assess your dependencies, and generate an upgrade plan
+- Execute the plan to automatically transform your codebase
+- Fix build issues and resolve migration errors during the upgrade process
+- Validate your application against known CVEs after the upgrade
+- Output a detailed summary including file changes, updated dependencies, and upgrade results
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+## How to Use
 
-## Contributing
+### Prerequisites
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit [Contributor License Agreements](https://cla.opensource.microsoft.com).
+Install the [GitHub Copilot CLI](https://github.com/features/copilot/cli):
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+```bash
+npm install -g @github/copilot
+```
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+### Installation
 
-## Trademarks
+Once GitHub Copilot CLI is set up, install this plugin:
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
-trademarks or logos is subject to and must follow
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+```bash
+copilot plugin marketplace add microsoft/modernize-java
+copilot plugin install modernize-java@microsoft/modernize-java
+```
+
+### Quick Start
+
+```bash
+copilot --yolo --no-ask-user --model claude-opus-4.6 --agent modernize-java:modernize-java
+```
+
+## Key Capabilities
+
+### 🔍 Intelligent Analysis and Upgrade Planning
+
+Modernization starts with understanding your code. The CLI automatically analyzes your Java project and generates a customizable upgrade plan that you can review and edit before execution.
+
+### 🔧 Automatic Code Transformation and Error Fixing
+
+The CLI apply code transformations, automatically resolve build issues, and run test validations — ensuring a smooth, error-free upgrade process without manual intervention.
+
+### 🛡️ Post-Upgrade CVE Validation
+
+After upgrade, the CLI scans for CVE (Common Vulnerabilities and Exposures) issues and code inconsistencies, then reports detected issues with suggested fixes to improve your application's security posture.
+
+### 🔄 Upgrade Summary
+
+At the end of each upgrade run, the CLI outputs a structured summary covering file changes, updated dependencies, test validation results, and any remaining issues — suitable for review in pull requests or CI logs.
+
+## Feedback
+
+We value your feedback — share [your thoughts here](https://aka.ms/AM4JFeedback) to help us continue improving the product.
+
+# License
+This extension is licensed under [GitHub Copilot Product Specific Terms](https://github.com/customer-terms/github-copilot-product-specific-terms).
+
+# Trademarks
+Authorized use of Microsoft trademarks or logos must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/legal/intellectualproperty/trademarks/usage/general).
+
+# Privacy statement
+GitHub Copilot modernization uses GitHub Copilot to make code changes, which does not retain code snippets beyond the immediate session. We do not collect, transmit, or store your custom tasks. Review the [Microsoft Privacy Statement](https://go.microsoft.com/fwlink/?LinkId=521839).
+
+Telemetry metrics are collected and analyzed to track feature usage and effectiveness. Learn more about [telemetry settings in VS Code](https://code.visualstudio.com/docs/configure/telemetry).
+
+# Transparency note
+GitHub Copilot modernization uses AI to make code changes, and AI sometimes makes mistakes. Please review and test all changes before using them in production.
+
+# Disclaimer
+Unless otherwise permitted under applicable license(s), users may not decompile, modify, repackage, or redistribute any assets, prompts, or internal tools provided as part of this product without prior written consent from Microsoft.
