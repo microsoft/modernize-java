@@ -30,7 +30,7 @@ copilot plugin install modernize-java@microsoft/modernize-java
 ### Quick Start
 
 ```bash
-copilot --yolo --no-ask-user --model claude-opus-4.6 --agent modernize-java:modernize-java
+copilot --model claude-sonnet-4.6 --agent modernize-java:modernize-java
 ```
 
 ## Key Capabilities
@@ -56,7 +56,7 @@ At the end of each upgrade run, the CLI outputs a structured summary covering fi
 We value your feedback — share [your thoughts here](https://aka.ms/AM4JFeedback) to help us continue improving the product.
 
 # License
-This extension is licensed under [GitHub Copilot Product Specific Terms](https://github.com/customer-terms/github-copilot-product-specific-terms).
+MIT
 
 # Trademarks
 Authorized use of Microsoft trademarks or logos must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/legal/intellectualproperty/trademarks/usage/general).
