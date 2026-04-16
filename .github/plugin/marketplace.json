@@ -1,0 +1,16 @@
+{
+  "name": "modernize-java",
+  "metadata": {
+    "description": "Copilot CLI plugins for GitHub Copilot modernization for Java"
+  },
+  "owner": {
+    "name": "Microsoft"
+  },
+  "plugins": [
+    {
+      "name": "modernize-java",
+      "source": "./plugins/modernize-java",
+      "description": "AI-powered Java modernization and upgrade assistant. Helps upgrade Java and Spring Boot applications to the latest versions."
+    }
+  ]
+}
