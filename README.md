@@ -24,7 +24,7 @@ Once GitHub Copilot CLI is set up, install this plugin:
 
 ```bash
 copilot plugin marketplace add microsoft/modernize-java
-copilot plugin install modernize-java@microsoft/modernize-java
+copilot plugin install modernize-java@modernize-java
 ```
 
 ### Quick Start
