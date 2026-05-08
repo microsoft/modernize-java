@@ -148,10 +148,10 @@ LLM training data may be outdated regarding the latest Java and Spring Boot rele
 1. Read HTML comments in "Key Challenges" and "Upgrade Steps" and "RULES" sections of `plan.md` to understand rules and expected format
 2. For incompatible deps in the "Technology Stack" table, we prefer: Replacement > Adaptation > Rewrite
 3. Determine intermediate versions needed (see **Intermediate Version Strategy**)
-4. Finalize "Available Tools" section based on the planned step sequence, determine which JDK versions are required and at which steps; mark any missing ones as `<TO_BE_INSTALLED>` with a note indicating which step needs it. Also mark build tools that need upgrading as `<TO_BE_UPGRADED>` (including wrapper version if applicable)
+4. Finalize "Available Tools" section based on the planned step sequence, determine which JDK versions are required and at which steps; mark any missing ones as `<TO_BE_INSTALLED>` with a note indicating which step needs it. Also mark build tools that need upgrading as `<TO_BE_UPGRADED>` (including wrapper version if applicable). **Exception — base (current) JDK**: If the project's current JDK version is not found via `#list-jdks`, do **not** mark it as `<TO_BE_INSTALLED>`. The base JDK is only needed for the optional baseline step; installing a JDK the user doesn't have provides no practical value. Instead, note it as "not available (baseline will be skipped)".
 5. Design step sequence:
-    - **Step 1 (MANDATORY)**: Setup Environment - Install all JDKs/build tools marked `<TO_BE_INSTALLED>`
-    - **Step 2 (MANDATORY)**: Setup Baseline - Stash changes via `#version-control(sessionId: <SESSION_ID>)` (if version control available), run compile/test with current JDK, document results
+    - **Step 1 (MANDATORY)**: Setup Environment - Install all JDKs/build tools marked `<TO_BE_INSTALLED>` (do NOT install the base JDK if it is unavailable — it is only needed for the optional baseline)
+    - **Step 2 (MANDATORY)**: Setup Baseline - If the base (current) JDK is available, stash changes via `#version-control(sessionId: <SESSION_ID>)` (if version control available), run compile/test with current JDK, document results. **If the base JDK is not available, skip this step**: report `#report-event(sessionId, event: "baselineSetup", phase: "execute", status: "skipped", message: "Base JDK not available — baseline skipped")` and proceed directly to the upgrade steps.
     - **Steps 3-N**: Upgrade steps - dependency order, high-risk early, isolated breaking changes. Compilation must pass (both main and test code); test failures documented for Final Validation.
     - **Final step (MANDATORY)**: Final Validation - verify all goals met, all TODOs resolved, achieve **Upgrade Success Criteria** through iterative test & fix loop (if tests are enabled). Rollback on failure after exhaustive fix attempts.
 6. Identify high-risk areas for "Key Challenges" section
@@ -199,8 +199,9 @@ For each step:
 7. Update `progress.md` with step details and mark ✅ or ❗
 8. Report event at end of each step:
     - **Step 1 (Setup Environment)**: `#report-event(sessionId, event: "environmentSetup", phase: "execute", status: "succeeded"|"failed"|"skipped", details: {jdkPath: "<JDK path>", buildToolPath: "<build tool executable path>"})` — **details are REQUIRED** for this event. The `jdkPath` and `buildToolPath` must be valid paths that exist on this machine. Use `"."` for `buildToolPath` if a wrapper (mvnw/gradlew) is used.
-    - **Step 2 (Setup Baseline)**: `#report-event(sessionId, event: "baselineSetup", phase: "execute", status: "succeeded"|"failed")`
+    - **Step 2 (Setup Baseline)**: `#report-event(sessionId, event: "baselineSetup", phase: "execute", status: "succeeded"|"failed"|"skipped")` — use `"skipped"` with a `message` when the base JDK is not available
     - **Before each upgrade step (Steps 3-N)**: `#report-event(sessionId, event: "upgradeStepStarted", phase: "execute", status: "succeeded", details: {stepNumber: <N>, stepTitle: "<title>"})`
+    - **After each upgrade step (Steps 3-N)**: `#report-event(sessionId, event: "upgradeStepCompleted", phase: "execute", status: "succeeded"|"failed", details: {stepNumber: <N>, stepTitle: "<title>", commitId: "<commitId from #version-control response, or 'N/A' if version control unavailable>"})`
     - **Final step (Final Validation)**: `#report-event(sessionId, event: "upgradeValidationCompleted", phase: "execute", status: "succeeded"|"failed", details: {stepNumber: <N>, stepTitle: "<title>", commitId: "<commit_id from #version-control response if version control available, otherwise 'N/A'>"})`
 
 #### 3. Complete
