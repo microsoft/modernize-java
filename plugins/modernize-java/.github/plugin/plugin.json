@@ -1,6 +1,6 @@
 {
   "name": "modernize-java",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI-powered Java modernization and upgrade assistant. Helps upgrade Java and Spring Boot applications to the latest versions.",
   "author": {
     "name": "Microsoft"
