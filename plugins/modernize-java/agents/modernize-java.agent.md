@@ -12,10 +12,6 @@ handoffs:
       agent: agent
       prompt: Generate unit tests for classes with low coverage using tool `#generate-tests-for-java`.
       send: true
-    - label: Containerize App
-      agent: agent
-      prompt: Scan my project and help me plan how to containerize my application using the `#get-containerization-plan` tool. Execute the plan. The end goal is to have Dockerfiles that are able to be built.
-      send: true
 hooks:
   PostToolUse:
     - type: command
