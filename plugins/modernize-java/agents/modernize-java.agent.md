@@ -12,6 +12,10 @@ handoffs:
       agent: agent
       prompt: Generate unit tests for classes with low coverage using tool `#generate-tests-for-java`.
       send: true
+    - label: Containerize App
+      agent: agent
+      prompt: Scan my project and help me plan how to containerize my application using the `#get-containerization-plan` tool. Execute the plan. The end goal is to have Dockerfiles that are able to be built.
+      send: true
 hooks:
   PostToolUse:
     - type: command
@@ -57,13 +61,14 @@ After completing changes in each step, review code changes per the rules in `pro
 - **Successor preference**: Compatible successor > Adapter pattern > Code rewrite.
 - **Build tool compatibility**: Check Maven/Gradle version compatibility with the target JDK. Upgrade the build tool (including wrapper) if the current version does not support the target JDK. Common minimum versions: Maven 3.9+ / Gradle 8.5+ for Java 21, Maven 4.0+ / Gradle 9.1+ for Java 25. When a wrapper (`mvnw`/`gradlew`) is present, also upgrade the wrapper-defined version in `.mvn/wrapper/maven-wrapper.properties` or `gradle/wrapper/gradle-wrapper.properties`.
 - **Temporary errors OK**: Steps may pass with known errors if resolved later or pre-existing.
+- **CVE version pin protection**: Before removing or downgrading any explicit `<version>` override in `<dependencyManagement>` or `<dependencies>`, verify it is not a CVE-driven pin. Check for: (1) nearby XML comments referencing CVE IDs or security fixes, (2) whether the pinned version is **newer** than the BOM-managed version — if so, it likely exists to patch a vulnerability. When in doubt, **keep the override** and document the decision.
 
 ### Execution Guidelines
 
 - **Wrapper preference**: Use Maven Wrapper (`mvnw`/`mvnw.cmd`) or Gradle Wrapper (`gradlew`/`gradlew.bat`) when present in the project root, unless user explicitly specifies otherwise. This ensures consistent build tool versions across environments.
 - **Version control via tool**: 🛑 NEVER use direct `git` commands in terminal — ONLY use `#version-control` for ALL version control operations (check status, create branch, commit, stash, discard changes). **ALWAYS pass `sessionId: <SESSION_ID>`** to every `#version-control` call for telemetry tracking. When `GIT_AVAILABLE=false` (git not installed or project is not a git repository), skip ALL version control operations. Files remain uncommitted in the working directory. Use `N/A` for `<current_branch>` and `<current_commit_id>` placeholders. Record a notice in `plan.md` that changes are not version-controlled during this upgrade.
 - **Version control timing**: `#version-control` requires `SESSION_ID` which is only available after Phase 1 (Precheck) succeeds. Do NOT use `#version-control` during Precheck. Git availability detection is deferred to Phase 2 Initialize.
-- **Template compliance**: For `plan.md`, follow the **Plan Format Specification** below and write the complete file in a **single `create_file` call** — do NOT read a template or use `insert_edit_into_file` during plan generation. For `progress.md` and `summary.md`, follow the rules and samples in each section's HTML comments of the template files.
+- **Template compliance**: For `plan.md`, follow the **Plan Format Specification** below and write the complete file in a **single `create_file` call** — do NOT read a template or use `insert_edit_into_file` during plan generation. For `progress.md`, follow the rules and samples in each section's HTML comments of the template file. For `summary.md`, read `summary.template.md` (in the session directory) as a spec, then write `summary.md` as a new file using `create_file`.
 - **Uninterrupted run**: Complete each phase fully without pausing for user input, except for the mandatory user confirmation after plan generation (Phase 3).
 - **User input**: Prefer `#askQuestions` tool when available to collect user input (e.g., choices, confirmations). Fall back to plain-text prompts only when `#askQuestions` is unavailable.
 
@@ -208,37 +213,96 @@ Common derivations:
 - Java 25 → Maven 4.0+, Gradle 9.1+
 - Build tool upgrade → update wrapper version
 
+### Section: Impact Analysis
+
+**This is the core of the plan.** A complete, file-level specification of every change required by the upgrade. Aim for completeness so the execution phase can apply changes by following this section alone.
+
+Organize findings into subsections:
+
+#### Subsection: Dependency Changes
+
+Table of all dependency/plugin/BOM changes in build files.
+
+Columns: File | Dependency | Current | Action | Target | Reason
+
+Actions: `upgrade`, `replace` (different artifact), `remove` (pin/override), `add` (new dep needed)
+
+Sample:
+```markdown
+| File | Dependency | Current | Action | Target | Reason |
+|------|-----------|---------|--------|--------|--------|
+| pom.xml | spring-boot-starter-parent | 2.7.18 | upgrade | 3.3.13 | User requested |
+| pom.xml | java.version | 11 | upgrade | 21 | User requested |
+| pom.xml | logback.version pin | 1.2.12 | remove | (managed) | Conflicts with SB 3.3 managed 1.5.x |
+| app-service/pom.xml | httpclient | 4.5.x | replace | httpclient5 | Removed in Spring Framework 6.0 |
+```
+
+#### Subsection: Source Code Changes
+
+Table of all source file modifications required.
+
+Columns: File | Location | Current | Required Change | Reason
+
+Sample:
+```markdown
+| File | Location | Current | Required Change | Reason |
+|------|----------|---------|----------------|--------|
+| UserController.java | import line 3 | javax.servlet.http.HttpServletRequest | Replace with: jakarta.servlet.http.HttpServletRequest | Jakarta EE 10 namespace |
+| SecurityConfig.java | class declaration | extends WebSecurityConfigurerAdapter | Rewrite to @Bean SecurityFilterChain | Removed in Spring Security 6.0 |
+| HttpClientService.java | imports + API calls | org.apache.http.* | Rewrite to org.apache.hc.client5.* | HttpClient 4→5 API change |
+```
+
+#### Subsection: Configuration Changes
+
+Table of changes to config files (`application.properties`, `application.yml`, XML configs, etc.). Omit if no config changes needed.
+
+Columns: File | Property/Setting | Current | Required Change | Reason
+
+#### Subsection: CI/CD Changes
+
+Table of CI/CD file updates needed to match the upgraded JDK/runtime.
+
+Columns: File | Location | Current | Required Change
+
+Sample:
+```markdown
+| File | Location | Current | Required Change |
+|------|----------|---------|----------------|
+| Dockerfile | line 1, 12 | mcr.microsoft.com/openjdk/jdk:11-ubuntu | Change to: jdk:21-ubuntu |
+| azure-pipelines.yml | line 8 | versionSpec: '11' | Change to: '21' |
+```
+
+#### Subsection: Risks & Warnings
+
+Items requiring special attention during execution — non-trivial rewrites, potential runtime-only issues, CVE-pinned versions, etc. Include genuine risks and medium-risk items with non-trivial mitigation, not routine changes. Include a mitigation strategy for each risk.
+
+Sample:
+```markdown
+- **SecurityConfig rewrite**: Non-trivial — Spring Security 6 DSL changed significantly (authorizeRequests → authorizeHttpRequests, antMatchers → requestMatchers, lambda DSL for CSRF). **Mitigation**: Verify security behavior with existing integration tests after rewrite; add a smoke test if none exist.
+- **JDK reflection usage in FooService.java:42**: `setAccessible(true)` on java.lang.reflect.Field — compiles but throws InaccessibleObjectException at runtime on JDK 17+. No test coverage for this path. **Mitigation**: Apply deterministic rewrite using `MethodHandles.privateLookupIn()`, or add `--add-opens` as a temporary workaround with a TODO to remove it.
+```
+
 ### Section: Upgrade Steps
 
 Step format:
 ```markdown
 - Step N: <Descriptive Title>
   - **Rationale**: Why this step is needed and why at this position
-  - **Changes to Make**: ≤5 bullet points (concise)
+  - **Changes to Make**: Reference specific items from Impact Analysis
   - **Verification**: Command, JDK, Expected Result
 ```
 
-**Verification expectations:**
-- Steps 1-N (Setup/Upgrade): Focus on COMPILATION SUCCESS. Tests may fail during intermediate steps.
-- Final step: COMPILATION SUCCESS + TEST PASS (if tests enabled in Options) through iterative fix loop.
+**Step design rules:**
+- **Every step must leave the project in a compilable state.** Do not create steps that expect compilation failure — group related changes together so each step compiles cleanly. For multi-module projects, verify compilation at the reactor root level if individual module verification is impractical.
+- **Reference Impact Analysis, don't duplicate it.** Steps should reference specific subsections or groups (e.g., "Apply all Dependency Changes for Spring Boot 3.x migration and corresponding Source Code Changes") rather than repeating every file change.
+- **Fewer, coarser steps.** Group related changes (e.g., all Spring Boot 3.x migration changes in one step) rather than one step per file.
 
 **Mandatory steps:**
 
 - **Step 1 (MANDATORY)**: Setup Environment — Install required JDKs/build tools marked `<TO_BE_INSTALLED>` (do NOT install the base JDK if it is unavailable — it is only needed for the optional baseline). Verify with `#list-jdks`. Expected: All required JDKs available.
 - **Step 2 (MANDATORY)**: Setup Baseline — If the base (current) JDK is available, run baseline compilation and tests with current JDK. Command: `mvn clean compile test-compile -q && mvn clean test -q`. Document SUCCESS/FAILURE, test pass rate (forms acceptance criteria). **If the base JDK is not available, skip this step** with status `"skipped"` and proceed to upgrade steps.
-- **Steps 3-N**: Upgrade steps — dependency order, high-risk early, isolated breaking changes. Verify with `mvn clean test-compile -q` (compile only).
-- **Final step (MANDATORY)**: Final Validation — Verify all goals met, resolve ALL TODOs and workarounds, clean rebuild with target JDK, run full test suite and fix ALL failures (iterative fix loop until 100% pass). Skip tests if disabled in Options. **For files flagged by the JDK source-code compatibility scan that lack test coverage, "compile + test pass" is NOT sufficient** — either (a) apply the deterministic rewrite as part of an upgrade step, or (b) document the residual runtime risk in `summary.md` Key Risks. Do not silently ship a latent JDK-version runtime bug.
-
-### Section: Key Challenges
-
-High-risk areas requiring special attention. Each with mitigation strategy.
-
-Sample:
-```markdown
-- **Jakarta EE Namespace Migration**
-   - **Challenge**: Codebase uses javax.* packages that must migrate to jakarta.* in Spring Boot 3+.
-   - **Strategy**: Use OpenRewrite migration recipes after Spring Boot 2.7.x intermediate.
-```
+- **Steps 3-N**: Upgrade steps — apply all changes from Impact Analysis. Group related changes so each step compiles. Verify with `mvn clean test-compile -q` (compile only).
+- **Final step (MANDATORY)**: Final Validation — Verify all goals met, resolve ALL TODOs and workarounds, clean rebuild with target JDK, run full test suite and fix ALL failures (iterative fix loop until 100% pass). Skip tests if disabled in Options. **For files flagged in Risks & Warnings as lacking test coverage, "compile + test pass" is NOT sufficient** — either (a) apply the deterministic rewrite as part of an upgrade step, or (b) document the residual runtime risk in `summary.md` Key Risks. Do not silently ship a latent JDK-version runtime bug.
 
 ## Workflow
 
@@ -262,39 +326,40 @@ Sample:
 1. Call tool `#report-event(sessionId, event: "planGenerationStarted", phase: "plan", status: "succeeded")` — **FIRST action, before any file or version control operations**
 2. **Detect version control availability**: Use `#version-control(sessionId: <SESSION_ID>, workspacePath, action: "checkStatus")` to detect if git is available. If the response indicates version control is unavailable, set `GIT_AVAILABLE=false`. **Do not ask the user. Do not report failure.**
 3. If `GIT_AVAILABLE=true`: Use `#version-control(sessionId: <SESSION_ID>, workspacePath, action: "stashChanges", stashMessage: "java-upgrade-precheck-<SESSION_ID>")` to stash any uncommitted changes.
-4. Extract user-specified guidelines from prompt (bulleted list; leave empty if none)
-5. Detect all available JDKs/build tools via `#list-jdks(sessionId)`, `#list-mavens(sessionId)`; record discovered versions and paths
-6. Detect wrapper presence; if wrapper exists, read wrapper properties file (`.mvn/wrapper/maven-wrapper.properties` or `gradle/wrapper/gradle-wrapper.properties`) to determine the wrapper-defined build tool version
-7. Check build tool version compatibility with target JDK — flag incompatible versions
-8. Identify core tech stack across **ALL modules** (direct deps + upgrade-critical deps)
-9. Include build tool (Maven/Gradle) and build plugins (`maven-compiler-plugin`, `maven-surefire-plugin`, `maven-war-plugin`, etc.) in the technology stack analysis — these are upgrade-critical even though they are not runtime dependencies
-10. Flag EOL dependencies (high priority for upgrade)
-11. Determine compatibility against upgrade goals
-12. **JDK source-code compatibility scan**: For each JDK version jump in the upgrade goals (e.g., 8 → 17 → 21), grep `src/**/*.java` (and other JVM-language sources) for source-level incompatibilities introduced by the JDK jump itself — i.e., code that compiles on the source JDK but breaks at compile or runtime on the target JDK because the language/JDK behavior changed. This is a curated, version-jump-driven scan, NOT a general SAST. In-scope pattern catalog:
-    - **Reflection into `java.base`**: `getDeclaredField`/`getDeclaredMethod` against `java.lang.*`, `java.util.*`, `java.nio.*`, etc. followed by `setAccessible(true)` → JDK 9+ illegal-access warning, JDK 17+ `InaccessibleObjectException` (strong encapsulation).
-    - **Internal/encapsulated package imports**: `sun.misc.*`, `sun.reflect.*`, `sun.nio.ch.*`, `jdk.internal.*` → JDK 9+ encapsulated/removed.
-    - **Removed or terminally deprecated APIs used by the project** (filter to those affecting the target version): e.g., `Thread.stop()`, `Thread.destroy()`, `Class.newInstance()` (deprecated 9+), `SecurityManager` use (deprecated 17, disabled 21+), `Object.finalize()` overrides.
-    - **JDK-removed modules requiring an explicit dependency** at the target version (JDK 11+): `javax.xml.bind` (JAXB), `javax.activation`, `javax.annotation`, `javax.transaction`, CORBA — flag for explicit dependency add. (Note: distinct from framework migrations like `javax.servlet` → `jakarta.servlet`, which are already handled by the Technology Stack analysis.)
+4. **Project environment**: Extract user-specified guidelines. Detect all available JDKs/build tools via `#list-jdks(sessionId)`, `#list-mavens(sessionId)`. Detect wrapper presence and read wrapper properties if present. Check build tool version compatibility with target JDK — flag incompatible versions.
+5. **Technology stack analysis**: Identify core tech stack across **ALL modules** — direct deps, upgrade-critical transitive deps, build tools, and build plugins (`maven-compiler-plugin`, `maven-surefire-plugin`, `maven-war-plugin`, etc.). Flag EOL dependencies. Determine compatibility against upgrade goals.
+6. **Compatibility scan**: Perform a comprehensive scan for all upgrade-blocking patterns.
+
+    **What to find:**
+
+    | Dimension | What to look for |
+    |-----------|-----------------|
+    | JDK source compatibility | Reflection into java.base internals (`setAccessible` on JDK classes), internal package imports (`sun.misc.*`, `sun.reflect.*`, `jdk.internal.*`), removed/deprecated APIs for the target JDK version, JDK-removed modules needing explicit deps (JAXB, javax.activation, etc.) |
+    | Framework breaking changes | For each framework major version jump: fetch the official migration guide, extract all breaking change patterns (removed/renamed classes, changed package namespaces, removed config properties, deprecated-then-removed APIs, changed defaults), then search source code and config files for every pattern found |
+    | CI/CD configuration | All CI/CD files (Dockerfile, workflows, pipelines, Jenkinsfile, etc.) with hardcoded JDK/Java version references that need updating |
+    | Build plugin compatibility | Build plugins incompatible with the target JDK version |
+    | Dependency version conflicts | Explicit version pins/overrides in dependency management that conflict with the target framework's BOM |
+    | Test infrastructure | Test framework compatibility with target JDK/framework (JUnit 4→5 migration, Mockito version compatibility, Spring Test API changes, test utility class removals/renames) |
+    | Configuration properties | Renamed, removed, or restructured config properties in application.properties/application.yml (e.g., Spring Boot 2→3 renames like `spring.redis.*` → `spring.data.redis.*`, removed properties, changed defaults) |
+    | Runtime behavior changes | JDK runtime behavior differences that compile but fail at runtime: serialization format changes, default locale/charset changes, `HashMap`/`HashSet` iteration order assumptions, `SecurityManager` removal (JDK 17+), strong encapsulation of internal APIs |
+    | Resource/metadata files | Framework metadata files that changed format or location (e.g., Spring Boot 3: `META-INF/spring.factories` → `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`), `META-INF/services` entries, `persistence.xml`, `web.xml`, and other descriptor files |
+
+    **Output requirement**: For each finding, record: file, line/location, current state, what needs to change, and why. Every finding must appear in the plan's Impact Analysis section. No known findings may be deferred to execution. Document known unknowns (e.g., transitive dependency conflicts only discoverable after version changes, runtime-only reflection issues) in Risks & Warnings with mitigation strategies.
 
 #### 2. Design & Review
 
 1. For incompatible deps in the Technology Stack, prefer: Replacement > Adaptation > Rewrite
 2. Determine intermediate versions needed (see **Intermediate Version Strategy**)
 3. Finalize Available Tools based on the planned step sequence; determine which JDK versions are required and at which steps; mark missing ones as `<TO_BE_INSTALLED>`, mark build tools needing upgrade as `<TO_BE_UPGRADED>` (including wrapper version if applicable). **Exception — base (current) JDK**: If the project's current JDK version is not found via `#list-jdks`, do **not** mark it as `<TO_BE_INSTALLED>`. The base JDK is only needed for the optional baseline step. Instead, note it as "not available (baseline will be skipped)".
-4. Design step sequence:
-    - **Step 1 (MANDATORY)**: Setup Environment - Install all JDKs/build tools marked `<TO_BE_INSTALLED>` (do NOT install the base JDK if it is unavailable — it is only needed for the optional baseline)
-    - **Step 2 (MANDATORY)**: Setup Baseline - If the base (current) JDK is available, stash changes via `#version-control(sessionId: <SESSION_ID>)` (if version control available), run compile/test with current JDK, document results. **If the base JDK is not available, skip this step**: report `#report-event(sessionId, event: "baselineSetup", phase: "execute", status: "skipped", message: "Base JDK not available — baseline skipped")` and proceed directly to the upgrade steps.
-    - **Steps 3-N**: Upgrade steps - dependency order, high-risk early, isolated breaking changes. Compilation must pass (both main and test code); test failures documented for Final Validation.
-    - **Final step (MANDATORY)**: Final Validation - verify all goals met, all TODOs resolved, achieve **Upgrade Success Criteria** through iterative test & fix loop (if tests are enabled). Rollback on failure after exhaustive fix attempts.
-5. Identify high-risk areas for Key Challenges. **All JDK source-code compatibility scan findings from Initialize & Analyze step 12 must be included** — each as a Key Challenge entry with `file:line`, the JDK version it breaks at, and the recommended fix; deterministic rewrites must also be reflected as concrete changes inside the relevant upgrade step.
-6. **Write complete `plan.md`** to `.github/java-upgrade/<SESSION_ID>/plan.md` using `create_file` — follow the **Plan Format Specification** above. Include all sections (Available Tools, Guidelines, Options, Upgrade Goals, Technology Stack, Derived Upgrades, Upgrade Steps, Key Challenges) in a single write. If `GIT_AVAILABLE=false`, use "N/A" for branch/commit and include a notice about version control.
+4. Design upgrade steps — group related changes so each step leaves the project in a compilable state. No step should expect compilation failure. Reference Impact Analysis items rather than repeating details.
+5. **Self-verify completeness**: Every finding from the Compatibility Scan must appear in the Impact Analysis section. Every item in Impact Analysis must be addressed by an Upgrade Step. If gaps are found, go back and fill them.
+6. **Write complete `plan.md`** to `.github/java-upgrade/<SESSION_ID>/plan.md` using `create_file` — follow the **Plan Format Specification** above. Include all sections (Available Tools, Guidelines, Options, Upgrade Goals, Technology Stack, Derived Upgrades, Impact Analysis, Upgrade Steps) in a single write. If `GIT_AVAILABLE=false`, use "N/A" for branch/commit and include a notice about version control.
 7. Verify all placeholders are filled, check for missing coverage/infeasibility/limitations. If issues found, rewrite the file.
 8. Call tool `#report-event(sessionId, event: "planReviewed", phase: "plan", status: "succeeded")`
 
 ### Phase 3: Confirm Plan with User (MANDATORY)
 
 1. Call tool `#confirm-upgrade-plan(sessionId)` — awaits user confirmation
-2. Call tool `#report-event(sessionId, event: "planConfirmed", phase: "plan", status: "succeeded")`
 
 ### Phase 4: Execute Upgrade Plan
 
@@ -344,16 +409,10 @@ For each step:
 
 1. **Scan CVEs**: Extract direct deps (`mvn dependency:list -DexcludeTransitive=true`), call `#validate-cves-for-java(sessionId, dependencies, projectPath)`
 2. **Collect test coverage**: Run `mvn clean verify -Djacoco.skip=false` or equivalent; record metrics
-3. Update `summary.md`:
-    - **Step 1 (Populate sections)**: Populate `summary.md` sections: Executive Summary, Upgrade Improvements (table + Key Benefits), Build and Validation, Limitations (write "None" if all issues resolved), Recommended Next Steps, Additional details (Project Details, Code Changes, Automated Tasks, CVEs)
-    - **Step 2 (Replace placeholders)**: Replace placeholders (including `<OS_USER_NAME>` with the actual OS username — use `$env:USERNAME` (Windows) or `$USER` (Unix) first; fall back to `whoami` if those are unavailable), follow **Template compliance**
-    - **Step 3 (Verify `summary.md`)**: After writing, confirm the file has no leftover template artifacts. Check each of the following — if any are found, remove the artifacts and rewrite the affected section immediately:
-        - No `<!--` HTML comments
-        - No `<placeholder>` tokens (e.g., `<one-paragraph summary>`, `<upgrade summary paragraph>`, `<OS_USER_NAME>`)
-        - No blank required fields
-        - No empty list items (lines that are just `-`, `*`, or similar)
-        - No bare outline/roman-numeral headings (e.g., `I.`, `II.`, `A.`) without content
-        - No duplicate section headings (the same `## N.` heading appearing more than once indicates the original template was not fully replaced — remove the leftover template portion entirely)
+3. Generate `summary.md`:
+    - **Read spec**: Read `summary.template.md` (in the session directory) — it contains the format specification with rules and samples.
+    - **Write**: Collect all data from `progress.md`, build output, CVE scan results, and coverage metrics. Resolve OS username (`$env:USERNAME` / `$USER` / `whoami`). Write `summary.md` as a new file using `create_file` per **Template compliance**.
+    - **Self-check**: Scan the written `summary.md` for HTML comments, `<placeholder>` tokens, empty bullets, unfilled table cells, bare headings without content, duplicate section headings. Fix any issues found.
 4. Clean up temp files; remove HTML comments from all `.md` files
 5. → `#report-event(sessionId, event: "summaryGenerated", phase: "summarize", status: "succeeded", message: "<1-2 sentence summary>")`
 
