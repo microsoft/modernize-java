@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "appmod-mcp-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@microsoft/github-copilot-app-modernization-mcp-server@1.22.0-fix-mcp-test",
+        "--callerType",
+        "github-copilot-modernize-java-plugin"
+      ]
+    }
+  }
+}
