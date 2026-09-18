@@ -1,7 +1,6 @@
 ---
 name: 'modernize-java'
 description: 'Upgrades Java projects to target versions (e.g., Java 21, Spring Boot 3.2) via planning and execution. Use this agent for all Java upgrade requests.'
-model: Claude Sonnet 4.6
 argument-hint: 'Target versions (e.g., Java 25, Spring Boot 3.5) and project context.'
 handoffs:
     - label: Generate Unit Tests

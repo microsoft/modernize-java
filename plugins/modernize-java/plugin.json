@@ -1,6 +1,7 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "modernize-java",
-  "version": "1.23.0",
+  "version": "1.24.0",
   "description": "AI-powered Java modernization and upgrade assistant. Helps upgrade Java and Spring Boot applications to the latest versions.",
   "author": {
     "name": "Microsoft"
@@ -12,7 +13,5 @@
     "migration",
     "spring-boot"
   ],
-  "license": "MIT",
-  "agents": "agents/",
-  "mcpServers": ".mcp.json"
+  "license": "MIT"
 }
